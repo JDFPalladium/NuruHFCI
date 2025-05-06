@@ -28,7 +28,7 @@ client = OpenAIOG()
 # Load index for retrieval
 storage_context = StorageContext.from_defaults(persist_dir="arv_metadata")
 index = load_index_from_storage(storage_context)
-retriever = index.as_retriever(similarity_top_k=5)
+retriever = index.as_retriever(similarity_top_k=3)
 
 # Define keyword lists
 acknowledgment_keywords_sw = ["sawa", "ndiyo", "naam", "hakika", "asante", "nimeelewa", "nimekupata", "ni kweli", "kwa hakika", "nimesikia", "ahsante"]
@@ -95,9 +95,7 @@ def nishauri(question, conversation_history: list[str]):
         source1return = ""
         source2return = ""
         source3return = ""
-        source4return = ""
-        source5return = ""
-        return reply_to_user, source1return, source2return, source3return, source4return, source5return, conversation_history
+        return reply_to_user, source1return, source2return, source3return, conversation_history
 
     # Detect language and translate if needed
     lang_question = detect_language(question)
@@ -129,19 +127,6 @@ def nishauri(question, conversation_history: list[str]):
                      "\n Source Text: " +
                      sources[2].text)
 
-    source4return = ("File Name: " +
-                     sources[3].metadata["file_name"] +
-                     "\nPage Number: " +
-                     sources[3].metadata["page_label"] +
-                     "\n Source Text: " +
-                     sources[3].text)
-
-    source5return = ("File Name: " +
-                     sources[4].metadata["file_name"] +
-                     "\nPage Number: " +
-                     sources[4].metadata["page_label"] +
-                     "\n Source Text: " +
-                     sources[4].text)
 
     # Combine into new user question - conversation history, new question, retrieved sources
     question_final = (
@@ -203,7 +188,7 @@ def nishauri(question, conversation_history: list[str]):
         reply_to_user = GoogleTranslator(source='auto', target='sw').translate(reply_to_user) 
 
     # return system_prompt, conversation_history 
-    return reply_to_user, source1return, source2return, source3return, source4return, source5return, conversation_history 
+    return reply_to_user, source1return, source2return, source3return, conversation_history 
 
 #%%
 demo = gr.Interface(
@@ -216,8 +201,6 @@ demo = gr.Interface(
         gr.Textbox(label = "Source 1", max_lines = 10, autoscroll = False, type = "text"),
         gr.Textbox(label = "Source 2", max_lines = 10, autoscroll = False, type = "text"),
         gr.Textbox(label = "Source 3", max_lines = 10, autoscroll = False, type = "text"),
-        gr.Textbox(label = "Source 4", max_lines = 10, autoscroll = False, type = "text"),
-        gr.Textbox(label = "Source 5", max_lines = 10, autoscroll = False, type = "text"),
         gr.State()
             ],
 )

@@ -20,7 +20,17 @@ jobs:
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
-      - name: Push to Hugging Face
-        run: |
-          git remote add hf https://username:${{ secrets.HF_TOKEN }}@huggingface.co/spaces/Nishauri/NuruCI
-          git push hf main --force
+    - name: Clone HF repo without history (no large files)
+      run: |
+        git clone --depth=1 https://YoniFriedman:${{ secrets.HF_TOKEN }}@huggingface.co/spaces/Nishauri/NuruCI hf_space
+
+    - name: Copy files except arv_metadata
+      run: |
+        rsync -av --exclude='arv_metadata/' ./ hf_space/
+
+    - name: Commit and push changes
+      run: |
+        cd hf_space
+        git add .
+        git commit -m "Deploy from GitHub Actions" || echo "No changes to commit"
+        git push

@@ -20,16 +20,16 @@ jobs:
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
-    - name: Clone HF repo without history (no large files)
-      run: |
-        git clone --depth=1 https://YoniFriedman:${{ secrets.HF_TOKEN }}@huggingface.co/spaces/Nishauri/NuruCI hf_space
-
-    - name: Copy files except arv_metadata
-      run: |
-        rsync -av --exclude='arv_metadata/' ./ hf_space/
-
-    - name: Commit and push changes
-      run: |
+      - name: Clone HF repo without history (no large files)
+        run: |
+          git clone --depth=1 https://YoniFriedman:${{ secrets.HF_TOKEN }}@huggingface.co/spaces/Nishauri/NuruCI hf_space
+  
+      - name: Copy files except arv_metadata
+        run: |
+          rsync -av --exclude='arv_metadata/' ./ hf_space/
+  
+      - name: Commit and push changes
+        run: |
         cd hf_space
         git add .
         git commit -m "Deploy from GitHub Actions" || echo "No changes to commit"

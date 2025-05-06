@@ -34,6 +34,9 @@ jobs:
         run: |
           cd hf_space
           git pull origin main --rebase
+          cd ..
+          rsync -av --exclude='arv_metadata/' ./ hf_space/
+          cd hf_space
           git add .
           git commit -m "Deploy from GitHub Actions" || echo "No changes to commit"
           git push https://github-actions:${{ secrets.GH_TOKEN }}@github.com/JDFPalladium/NuruHFCI.git

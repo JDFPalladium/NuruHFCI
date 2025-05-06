@@ -33,4 +33,4 @@ jobs:
           cd hf_space
           git add .
           git commit -m "Deploy from GitHub Actions" || echo "No changes to commit"
-          git push https://github-actions:${{ secrets.GH_TOKEN }}@github.com/JDFPalladium/NuruCI.git
+          git push https://github-actions:${{ secrets.GH_TOKEN }}@github.com/JDFPalladium/NuruHFCI.git

@@ -193,7 +193,7 @@ def nishauri(question, conversation_history: list[str]):
 #%%
 demo = gr.Interface(
     title = "Nuru Chatbot Demo",
-    description="Enter a question and see the processed outputs in collapsible boxes.",
+    description="Enter a question and see the processed outputs in collapsible boxes",
     fn=nishauri,
     inputs=["text", gr.State(value=[])],
     outputs=[

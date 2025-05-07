@@ -1,5 +1,5 @@
 gradio==4.44.1
-llama_index==0.10.51
+llama_index==0.12.34
 langdetect==1.0.9
 deep-translator==1.11.4
 lingua-language-detector==2.0.2

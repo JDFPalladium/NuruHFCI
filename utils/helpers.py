@@ -101,3 +101,10 @@ def detect_intention(user_input, client):
     )
 
     return completion.choices[0].message.content
+
+def convert_to_date(date_str, datetime):
+    """Convert date string in YYYYMMDD format to YYYY-MM-DD."""
+    try:
+        return datetime.strptime(date_str, "%Y%m%d").strftime("%Y-%m-%d")
+    except ValueError:
+        return "Unknown Date"

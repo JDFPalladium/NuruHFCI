@@ -3,6 +3,8 @@
 #%%
 # Import libraries
 import os
+import json
+from datetime import datetime
 from lingua import Language, LanguageDetectorBuilder 
 import gradio as gr
 from openai import OpenAI as OpenAIOG
@@ -27,20 +29,41 @@ client = OpenAIOG()
 # Load index for retrieval
 storage_context = StorageContext.from_defaults(persist_dir="arv_metadata")
 index = load_index_from_storage(storage_context)
-retriever = index.as_retriever(similarity_top_k=10,
-                                # Similarity threshold for filtering
-                                similarity_threshold=0.5,
-                                # Use LLM reranking to filter results
-                                reranker=LLMRerank(top_n=3))
+# retriever = index.as_retriever(similarity_top_k=10,
+#                                 # Similarity threshold for filtering
+#                                 similarity_threshold=0.5)
 
 #%%
 # Define Gradio function
-def nishauri(question, conversation_history: list[str]):
+def nishauri(user_params: str, conversation_history: list[str]):
 
     """Process user query, detect language, handle greetings, acknowledgments, and retrieve relevant information."""
     # context = " ".join([item["user"] + " " + item["chatbot"] for item in conversation_history])    
     # formatted_history = convert_conversation_format(conversation_history)
     # summary = summarize_conversation(formatted_history)
+    user_params = json.loads(user_params)
+    
+    # Extract user information
+    consent = user_params.get("CONSENT")
+    person_info = user_params.get("PERSON_INFO", {})
+    gender = person_info.get("GENDER", "")
+    age = person_info.get("AGE", "")
+    vl_result = person_info.get("VIRAL_LOAD", "")
+    vl_date = helpers.convert_to_date(person_info.get("VIRAL_LOAD_DATETIME", ""), datetime)
+    next_appt_date = helpers.convert_to_date(person_info.get("APPOINTMENT_DATETIME", ""), datetime)
+    regimen = person_info.get("REGIMEN", "")
+    question = user_params.get("QUESTION", "")
+
+    info_pieces = [
+        "Here is information about the person asking the question."
+        f"The person is {gender}." if gender else "",
+        f"The person is age {age}." if age else "",
+        f"The person's next clinical check-in is scheduled for {next_appt_date}." if next_appt_date else "",
+        f"The person is on the following regimen for HIV: {regimen}." if regimen else "",
+        f"The person's most recent viral load result was {vl_result}." if vl_result else "",
+        f"The person's most recent viral load was taken on {vl_date}." if vl_date else "",
+    ]
+    full_text = " ".join(filter(None, info_pieces))
 
     # detect language of user
     lang_question = helpers.detect_language(question, Language, LanguageDetectorBuilder, client)
@@ -78,8 +101,29 @@ def nishauri(question, conversation_history: list[str]):
         question = GoogleTranslator(source='sw', target='en').translate(question)
     
     # Retrieve relevant sources
-    sources = retriever.retrieve(question)
-    retrieved_text = "\n\n".join([f"Source {i+1}: {source.text}" for i, source in enumerate(sources[:3])])
+    # sources = retriever.retrieve(question)
+    # Summarize the conversation history
+    history_summary = " ".join(
+        [f"User: {turn['user']} Assistant: {turn['chatbot']}" for turn in conversation_history]
+    )
+    query_with_context = f"Current question: {question}\n\nSummary of prior context: {history_summary}"
+
+    # Initialize the LLMRerank postprocessor
+    reranker = LLMRerank(top_n=3)
+
+    # Attach the reranker to the retriever
+    retriever_with_rerank = index.as_retriever(
+        similarity_top_k=10,
+        similarity_threshold=0.6,
+        postprocessors=[reranker]
+    )
+
+    # Retrieve and re-rank sources
+    sources = retriever_with_rerank.retrieve(query_with_context)
+
+    # Combine the top-ranked sources
+    retrieved_text = "\n\n".join([f"Source {i+1}: {source.text}" for i, source in enumerate(sources)])
+
 
     # Combine into new user question - conversation history, new question, retrieved sources
     question_final = (
@@ -96,7 +140,8 @@ def nishauri(question, conversation_history: list[str]):
         "You are a helpful assistant who only answers questions about HIV.\n"
         "- Only answers questions about HIV (Human Immunodeficiency Virus).\n"
         "- Recognize that users may type 'HIV' with any capitalization (e.g., HIV, hiv, Hiv, etc.) or make minor typos (e.g., hvi, hiv/aids).\n"
-        "- Use your best judgment to understand when a user intends to refer to HIV. Politely correct any significant misunderstandings, but otherwise proceed to answer normally.\n"
+        "- If a question is ambiguous or might be indirectly related to HIV (e.g., symptoms, illness, or general health concerns), assume it could be relevant to HIV and respond accordingly.\n"
+        "- If a question is about using the Nishauri app, such as finding viral load results, regimen details, or the next appointment, provide clear instructions on how to navigate the app to find this information.\n"
         "- Do not answer questions about other topics (e.g., malaria or tuberculosis).\n"
         "- If a question is unrelated to HIV, politely respond that you can only answer HIV-related questions.\n\n"
     
@@ -115,6 +160,9 @@ def nishauri(question, conversation_history: list[str]):
         "- A suppressed viral load is one below 200 copies/ml.\n\n"
     )
  
+    if consent == "YES":
+        system_prompt = f"{system_prompt} {full_text}."
+
     # Start with context
     messages = [{"role": "system", "content": system_prompt}]
 

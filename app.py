@@ -3,10 +3,7 @@
 #%%
 # Import libraries
 import os
-import logging
-import re
-from langdetect import detect
-from lingua import Language, LanguageDetectorBuilder
+from lingua import Language, LanguageDetectorBuilder 
 import gradio as gr
 from openai import OpenAI as OpenAIOG
 from llama_index.llms.openai import OpenAI
@@ -41,7 +38,7 @@ retriever = index.as_retriever(similarity_top_k=10,
 def nishauri(question, conversation_history: list[str]):
 
     """Process user query, detect language, handle greetings, acknowledgments, and retrieve relevant information."""
-    context = " ".join([item["user"] + " " + item["chatbot"] for item in conversation_history])    
+    # context = " ".join([item["user"] + " " + item["chatbot"] for item in conversation_history])    
     # formatted_history = convert_conversation_format(conversation_history)
     # summary = summarize_conversation(formatted_history)
 

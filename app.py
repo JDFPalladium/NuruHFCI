@@ -11,8 +11,10 @@ import gradio as gr
 from openai import OpenAI as OpenAIOG
 from llama_index.llms.openai import OpenAI
 from llama_index.core import StorageContext, load_index_from_storage
+from llama_index.core.postprocessor.llm_rerank import LLMRerank
 from deep_translator import GoogleTranslator
 from dotenv import load_dotenv
+import utils.helpers as helpers
 
 # Load environment variables from .env file
 load_dotenv()
@@ -28,105 +30,59 @@ client = OpenAIOG()
 # Load index for retrieval
 storage_context = StorageContext.from_defaults(persist_dir="arv_metadata")
 index = load_index_from_storage(storage_context)
-retriever = index.as_retriever(similarity_top_k=3)
+retriever = index.as_retriever(similarity_top_k=10,
+                                # Similarity threshold for filtering
+                                similarity_threshold=0.5,
+                                # Use LLM reranking to filter results
+                                reranker=LLMRerank(top_n=3))
 
-# Define keyword lists
-acknowledgment_keywords_sw = ["sawa", "ndiyo", "naam", "hakika", "asante", "nimeelewa", "nimekupata", "ni kweli", "kwa hakika", "nimesikia", "ahsante"]
-acknowledgment_keywords_en = ["thanks", "thank you", "thx", "ok", "okay", "great", "got it", "appreciate", "good", "makes sense"]
-follow_up_keywords = ["but", "also", "and", "what", "how", "why", "when", "is", "?", "lakini", "pia", "na", "nini", "vipi", "kwanini", "wakati"]
-greeting_keywords_sw = ["sasa", "niaje", "habari", "mambo", "jambo", "shikamoo", "marahaba", "hujambo", "hamjambo", "salama", "vipi"]
-greeting_keywords_en = ["hi", "hello", "hey", "how's it", "what's up", "yo", "howdy"]
-#%%
-# Define helper functions
-
-def contains_exact_word_or_phrase(text, keywords):
-    """Check if the given text contains any exact keyword from the list."""
-    text = text.lower()
-    return any(re.search(r'\b' + re.escape(keyword) + r'\b', text) for keyword in keywords)
-
-def contains_greeting_sw(text):
-    return contains_exact_word_or_phrase(text, greeting_keywords_sw)
-
-def contains_greeting_en(text):
-    return contains_exact_word_or_phrase(text, greeting_keywords_en)
-
-def contains_acknowledgment_sw(text):
-    return contains_exact_word_or_phrase(text, acknowledgment_keywords_sw)
-
-def contains_acknowledgment_en(text):
-    return contains_exact_word_or_phrase(text, acknowledgment_keywords_en)
-
-def contains_follow_up(text):
-    return contains_exact_word_or_phrase(text, follow_up_keywords)
-
-def detect_language(text):
-    """Detect language of a given text using Lingua for short texts and langdetect for longer ones."""
-    if len(text.split()) < 5:
-        languages = [Language.ENGLISH, Language.SWAHILI]
-        detector = LanguageDetectorBuilder.from_languages(*languages).build()
-        detected_language = detector.detect_language_of(text)
-        return "sw" if detected_language == Language.SWAHILI else "en"
-    try:
-        return detect(text)
-    except Exception as e:
-        logging.warning(f"Language detection error: {e}")
-        return "unknown"
 #%%
 # Define Gradio function
 def nishauri(question, conversation_history: list[str]):
 
     """Process user query, detect language, handle greetings, acknowledgments, and retrieve relevant information."""
     context = " ".join([item["user"] + " " + item["chatbot"] for item in conversation_history])    
-    
-    # Process greetings and acknowledgments
-    for lang, contains_greeting, contains_acknowledgment in [("en", contains_greeting_en, contains_acknowledgment_en), ("sw", contains_greeting_sw, contains_acknowledgment_sw)]:
-        if contains_greeting(question) and not contains_follow_up(question):
-            prompt = f"The user said: {question}. Respond accordingly in {lang}."
-        elif contains_acknowledgment(question) and not contains_follow_up(question):
-            prompt = f"The user acknowledged: {question}. Respond accordingly in {lang}."
-        else:
-            continue
+    # formatted_history = convert_conversation_format(conversation_history)
+    # summary = summarize_conversation(formatted_history)
+
+    # detect language of user
+    lang_question = helpers.detect_language(question, Language, LanguageDetectorBuilder, client)
+    print(lang_question)
+
+    # If user is making a greeting or acknowledgement, address that accordingly
+    intent = helpers.detect_intention(question, client = client)
+    if intent == "greeting":
+        prompt = f"""
+        The user greeted you as follows: {question}.
+        Respond by asking if they have any questions about HIV.
+        Respond in {"Swahili" if lang_question == "sw" else "English"}.
+        """
+    elif intent == "acknowledgment":
+        prompt = f"""
+        The user acknowledged a response you gave to a prior question as follows {question}.
+        Respond by saying you are ready to help if they have any more questions.
+        Respond in {"Swahili" if lang_question == "sw" else "English"}.
+        """         
+    else:
+        prompt = None
+
+    if prompt:
         completion = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}]
         )
         reply_to_user = completion.choices[0].message.content
         conversation_history.append({"user": question, "chatbot": reply_to_user})
-        source1return = ""
-        source2return = ""
-        source3return = ""
-        return reply_to_user, source1return, source2return, source3return, conversation_history
+        return reply_to_user, conversation_history
 
-    # Detect language and translate if needed
-    lang_question = detect_language(question)
+    # If the user is asking a question, proceed with the RAG pipeline
+    # Translate if needed
     if lang_question == "sw":
         question = GoogleTranslator(source='sw', target='en').translate(question)
     
     # Retrieve relevant sources
     sources = retriever.retrieve(question)
-    retrieved_text = "\n\n".join([f"Source {i+1}: {source.text}" for i, source in enumerate(sources[:5])])
-
-    source1return = ("File Name: " +
-                     sources[0].metadata["file_name"] +
-                     "\nPage Number: " +
-                     sources[0].metadata["page_label"] +
-                     "\n Source Text: " +
-                     sources[0].text)
-    
-    source2return = ("File Name: " +
-                     sources[1].metadata["file_name"] +
-                     "\nPage Number: " +
-                     sources[1].metadata["page_label"] +
-                     "\n Source Text: " +
-                     sources[1].text)
-        
-    source3return = ("File Name: " +
-                     sources[2].metadata["file_name"] +
-                     "\nPage Number: " +
-                     sources[2].metadata["page_label"] +
-                     "\n Source Text: " +
-                     sources[2].text)
-
+    retrieved_text = "\n\n".join([f"Source {i+1}: {source.text}" for i, source in enumerate(sources[:3])])
 
     # Combine into new user question - conversation history, new question, retrieved sources
     question_final = (
@@ -141,7 +97,9 @@ def nishauri(question, conversation_history: list[str]):
     # Set LLM instructions. If user consented, add user parameters, otherwise proceed without
     system_prompt = (
         "You are a helpful assistant who only answers questions about HIV.\n"
-        "- Only answers questions about HIV (Human Immunodeficiency Virus). Recognize that users may type 'HIV' with any capitalization (e.g., HIV, hiv, Hiv, etc.) or make minor typos (e.g., hvi, hiv/aids). Use your best judgment to understand when a user intends to refer to HIV. Politely correct any significant misunderstandings, but otherwise proceed to answer normally.\n"
+        "- Only answers questions about HIV (Human Immunodeficiency Virus).\n"
+        "- Recognize that users may type 'HIV' with any capitalization (e.g., HIV, hiv, Hiv, etc.) or make minor typos (e.g., hvi, hiv/aids).\n"
+        "- Use your best judgment to understand when a user intends to refer to HIV. Politely correct any significant misunderstandings, but otherwise proceed to answer normally.\n"
         "- Do not answer questions about other topics (e.g., malaria or tuberculosis).\n"
         "- If a question is unrelated to HIV, politely respond that you can only answer HIV-related questions.\n\n"
     
@@ -188,7 +146,7 @@ def nishauri(question, conversation_history: list[str]):
         reply_to_user = GoogleTranslator(source='auto', target='sw').translate(reply_to_user) 
 
     # return system_prompt, conversation_history 
-    return reply_to_user, source1return, source2return, source3return, conversation_history 
+    return reply_to_user, conversation_history 
 
 #%%
 demo = gr.Interface(
@@ -198,9 +156,6 @@ demo = gr.Interface(
     inputs=["text", gr.State(value=[])],
     outputs=[
         gr.Textbox(label = "Nuru Response", type = "text"),
-        gr.Textbox(label = "Source 1", max_lines = 10, autoscroll = False, type = "text"),
-        gr.Textbox(label = "Source 2", max_lines = 10, autoscroll = False, type = "text"),
-        gr.Textbox(label = "Source 3", max_lines = 10, autoscroll = False, type = "text"),
         gr.State()
             ],
 )

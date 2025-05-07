@@ -5,3 +5,6 @@ install:
 
 lint: 
 	pylint --disable=R,C app.py
+
+test:
+	PYTHONPATH=. pytest -vv tests/test_app.py

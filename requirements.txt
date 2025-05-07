@@ -5,3 +5,5 @@ deep-translator==1.11.4
 lingua-language-detector==2.0.2
 dotenv==0.9.9
 pylint
+pytest
+pytest-mock

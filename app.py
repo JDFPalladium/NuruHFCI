@@ -195,7 +195,7 @@ def nishauri(user_params: str, conversation_history: list[str]):
     return reply_to_user, conversation_history 
 
 #%%
-demo = gr.Interface(
+app = gr.Interface(
     title = "Nuru Chatbot Demo",
     description="Enter a question and see the processed outputs in collapsible boxes",
     fn=nishauri,
@@ -207,7 +207,5 @@ demo = gr.Interface(
 )
 
 # for testing purposes to run as script
-# if __name__ == "__main__":
-#     demo.launch()
-
-demo.launch()
+if __name__ == "__main__":
+    app.launch()

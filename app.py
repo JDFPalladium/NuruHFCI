@@ -4,6 +4,7 @@
 # Import libraries
 import os
 import json
+import logging
 from datetime import datetime
 from lingua import Language, LanguageDetectorBuilder 
 import gradio as gr
@@ -66,7 +67,7 @@ def nishauri(user_params: str, conversation_history: list[str]):
     full_text = " ".join(filter(None, info_pieces))
 
     # detect language of user
-    lang_question = helpers.detect_language(question, Language, LanguageDetectorBuilder, client)
+    lang_question = helpers.detect_language(question, Language, LanguageDetectorBuilder, client, logging)
     print(lang_question)
 
     # If user is making a greeting or acknowledgement, address that accordingly

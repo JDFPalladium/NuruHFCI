@@ -206,5 +206,8 @@ demo = gr.Interface(
             ],
 )
 
-if __name__ == "__main__":
-    demo.launch()
+# for testing purposes to run as script
+# if __name__ == "__main__":
+#     demo.launch()
+
+demo.launch()
